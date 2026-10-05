@@ -1,0 +1,24 @@
+app:
+  name: LocalAgentTeam
+  timezone: Asia/Karachi
+
+runtime:
+  max_concurrent_tasks: 3
+  task_timeout_seconds: 1800
+
+resources:
+  cpu_percent_limit: 85
+  ram_percent_limit: 80
+  poll_seconds: 5
+
+workspace:
+  root: workspaces
+  cleanup_after_success: true
+
+approval:
+  required: true
+  auto_publish: false
+
+browser:
+  headless: false
+  persistent_profile: true
