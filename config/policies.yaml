@@ -1,0 +1,14 @@
+copyright:
+  safe_mode: true
+  copy_source_verbatim: false
+  preserve_facts: true
+  preserve_source_url: true
+
+publishing:
+  require_qa: true
+  require_human_approval: true
+  auto_publish: false
+
+security:
+  allow_destructive_commands: false
+  allow_untrusted_scripts: false
