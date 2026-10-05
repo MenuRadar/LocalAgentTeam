@@ -1,0 +1,4 @@
+from .models import Handoff
+class MenuRadarPipeline:
+ def plan(self,source_url):
+  return [Handoff(task_id='pipeline',from_agent='manager',to_agent='browser-use',input={'url':source_url},next_action='inspect source'),Handoff(task_id='pipeline',from_agent='browser-use',to_agent='crawl4ai',input={'url':source_url},next_action='extract structured data'),Handoff(task_id='pipeline',from_agent='crawl4ai',to_agent='content',input={'source_url':source_url},next_action='draft from verified facts'),Handoff(task_id='pipeline',from_agent='content',to_agent='seo',next_action='optimize metadata and links'),Handoff(task_id='pipeline',from_agent='seo',to_agent='qa',next_action='validate completeness, links and source integrity'),Handoff(task_id='pipeline',from_agent='qa',to_agent='human-approval',next_action='approve before publishing'),Handoff(task_id='pipeline',from_agent='human-approval',to_agent='github',next_action='publish after approval')]
