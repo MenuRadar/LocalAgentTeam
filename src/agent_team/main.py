@@ -1,8 +1,11 @@
 import asyncio
 import argparse
 import uvicorn
+from dotenv import load_dotenv
 from .integrations import discover_integrations
 from .resource_guard import ResourceGuard
+
+load_dotenv()
 
 def doctor():
     r=discover_integrations()
@@ -24,8 +27,7 @@ def main():
     run.add_argument("--input-url")
     run.add_argument("--task",default="")
     a=p.parse_args()
-    if a.command=="doctor":
-        doctor(); return
+    if a.command=="doctor": doctor(); return
     if a.command=="web":
         uvicorn.run("agent_team.webapp:app",host=a.host,port=a.port,reload=False); return
     if a.command=="run" and a.type=="menuradar":
