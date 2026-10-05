@@ -1,70 +1,58 @@
 # LocalAgentTeam
 
-A local orchestration layer that **combines existing agent/tool ecosystems instead of rebuilding them**.
+LocalAgentTeam is a local orchestration/interface layer — not a replacement for the agents already available.
 
-## Core principle
+## Core rule
 
-This project does not try to replace Browser Use, Crawl4AI, OpenAI Agents SDK, OpenHands, or GitHub. It provides a thin local interface that discovers capabilities, routes work to the appropriate existing tool/agent, passes structured handoffs between them, and applies approval/resource policies.
+Discover and reuse existing capable tools first. Never build a duplicate agent when an existing provider can perform the capability.
 
-### Reused components
-- **OpenAI Agents SDK** — orchestration/model-agent runtime when installed.
-- **Browser Use** — browser automation.
-- **Crawl4AI** — crawling and extraction.
-- **OpenHands SDK** — coding/repository tasks when installed.
-- **PyGithub / GitHub API** — publishing and repository operations.
-- **psutil** — local CPU/RAM guard.
-- **SQLite** — durable task state; no external database required.
+## Reused providers
+- OpenAI Agents SDK — manager-style agent orchestration.
+- Browser Use — browser automation.
+- Crawl4AI — web crawling and extraction.
+- OpenHands — coding/repository work when a supported SDK client is available.
+- PyGithub / GitHub API — repository publishing.
+- psutil + SQLite — local resource and state management.
 
-The adapters are intentionally optional: the application can start and inspect capabilities even if one integration is not installed.
+## Local interface
 
-## Architecture
+Install and run:
 
-`USER -> MANAGER -> CAPABILITY REGISTRY -> EXISTING TOOL/AGENT -> HANDOFF -> QA/APPROVAL -> PUBLISHER`
+    powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+    python -m agent_team.main doctor
+    python -m agent_team.main web
 
-For MenuRadar:
+Then open http://127.0.0.1:8787.
 
-`source URL -> browser/crawler -> structured data -> content/SEO -> QA -> approval -> GitHub -> homepage/sitemap`
+The current UI provides provider detection, task routing, Crawl4AI execution, OpenAI Agents execution, and MenuRadar pipeline planning.
 
-The system stops publishing if a completeness check fails (for example, source has 212 menu items but output contains 178).
+## MenuRadar flow
 
-## Quick start (Windows)
+USER -> MANAGER/ROUTER -> existing providers -> structured handoff -> CONTENT/SEO -> QA -> HUMAN APPROVAL -> GitHub Publisher -> homepage/sitemap/verification
 
-1. Install Python 3.11+.
-2. Run `powershell -ExecutionPolicy Bypass -File scripts/install.ps1`.
-3. Copy `.env.example` to `.env` and add only the keys you actually use.
-4. Run `powershell -ExecutionPolicy Bypass -File scripts/start.ps1`.
+Completeness is a hard publishing gate. If a source has 212 menu items and output has 178, the task is BLOCKED and must not publish.
 
-Default policy is safe: approval is required and auto-publish is disabled.
+## Safety defaults
+- Human approval required.
+- Auto-publish disabled.
+- Source prose is not copied verbatim.
+- Missing integrations are reported, not fabricated.
+- Resource limits prevent starting work when the machine is under pressure.
 
-## Optional integrations
+## Environment
 
-Install the packages you need. The core registry never fabricates a missing integration.
+    OPENAI_API_KEY=
+    GITHUB_TOKEN=
+    GITHUB_REPO=MenuRadar/MenuRadar.github.io
 
-```powershell
-pip install openai-agents browser-use crawl4ai psutil pydantic pydantic-settings pyyaml aiosqlite httpx python-dotenv
-# Optional coding integration:
-pip install openhands-sdk
-```
+Install all optional adapters with:
 
-Browser Use/Crawl4AI may have additional system/browser requirements; their own upstream installation process remains authoritative.
+    pip install -e .[all]
 
-## Commands
-
-```powershell
-python -m agent_team.main doctor
-python -m agent_team.main run --type crawl --input-url "https://example.com"
-python -m agent_team.main run --type menuradar --input-url "https://menupricetoday.com/us/brands/kfc"
-```
-
-## Safety
-
-- No automatic publishing by default.
-- No destructive shell/repository actions without explicit policy approval.
-- Source facts are preserved but source prose is not copied verbatim.
-- Each task gets an isolated workspace.
-- CPU/RAM limits prevent launching more work when the machine is under pressure.
-- Existing capable integrations are preferred over creating duplicate agents.
+Browser Use and Crawl4AI may require their own browser/system setup; follow their upstream installation requirements.
 
 ## Development
 
-`pytest` runs the local unit tests. GitHub Actions runs the same test suite on pushes/PRs.
+    pytest -q
+
+GitHub Actions runs the tests on pushes and pull requests.
