@@ -6,6 +6,7 @@ from .manager import Manager
 from .adapters import Crawl4AIAdapter, OpenAIAgentsAdapter, BrowserUseAdapter
 from .pipeline import MenuRadarPipeline
 from .runtime import runtime_manager
+from .publisher import GitHubPublisher
 
 app = FastAPI(title="LocalAgentTeam", version="0.6.0")
 manager = Manager()
@@ -16,6 +17,11 @@ class TaskRequest(BaseModel):
 
 class DecisionRequest(BaseModel):
     approved: bool
+
+class PublishRequest(BaseModel):
+    path: str
+    content: str
+    message: str = "publish: LocalAgentTeam approved artifact"
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -32,7 +38,7 @@ async def home():
 <div class="actions"><button id="start" onclick="start()">▶ Start</button><button class="alt" onclick="clearAll()">Clear</button><button class="danger" id="stop" onclick="stopTask()" disabled>■ Stop</button><span id="status"></span></div><div class="bar"><i id="bar"></i></div></div>
 <div class="card"><h2>Live Activity</h2><div class="log" id="log"><div class="line"><b>READY</b> — waiting for a task</div></div></div>
 <div class="card"><h2>Approval Gate</h2><div id="approval" class="approval"><b>Human approval required</b><p>Review the output above. Publishing is blocked until you approve.</p><button onclick="decision(true)">✓ Approve</button><button class="danger" onclick="decision(false)">✕ Reject</button></div><div id="noapproval">No task is waiting for approval.</div></div>
-<div class="card"><h2>Output</h2><div class="result" id="result">No output.</div></div>
+<div class="card"><h2>Output / Publish</h2><div class="result" id="result">No output.</div><input id="pubpath" placeholder="GitHub path, e.g. posts/kfc-menu.html"><button id="publish" onclick="publish()" disabled>↥ Publish Approved Output</button></div>
 </main><aside>
 <div class="card"><h2>Live Pipeline</h2><div class="flow">
 <div class="node" data-k="manager"><div class="ico">◆</div><div><b>Manager</b><small>routing</small></div><div class="state">idle</div></div><div class="node" data-k="browser"><div class="ico">◉</div><div><b>Browser Use</b><small>browser interaction</small></div><div class="state">idle</div></div><div class="node" data-k="crawler"><div class="ico">⌁</div><div><b>Crawl4AI</b><small>web extraction</small></div><div class="state">idle</div></div><div class="node" data-k="agent"><div class="ico">✦</div><div><b>Existing AI Agent</b><small>reasoning</small></div><div class="state">idle</div></div><div class="node" data-k="qa"><div class="ico">✓</div><div><b>QA / Approval</b><small>quality gate</small></div><div class="state">idle</div></div><div class="node" data-k="github"><div class="ico">↥</div><div><b>GitHub Publisher</b><small>publish after approval</small></div><div class="state">idle</div></div></div></div>
@@ -49,7 +55,8 @@ function render(x){taskId=x.id;$("bar").style.width=x.progress+"%";$("status").t
 function connect(id){if(ws)ws.close();ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws/tasks/"+id);ws.onmessage=e=>render(JSON.parse(e.data));ws.onclose=()=>{}}
 async function start(){let task=$("task").value.trim(),input_url=$("url").value.trim()||null;if(!task)return log("Enter a task","WAIT");reset();$("start").disabled=true;$("stop").disabled=false;$("log").innerHTML="";let r=await fetch("/api/tasks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task,input_url})});let x=await r.json();render(x);connect(x.id);loadHistory()}
 async function stopTask(){if(!taskId)return;await fetch("/api/tasks/"+taskId+"/cancel",{method:"POST"});log("Stop requested","CANCEL")}
-async function decision(ok){if(!taskId)return;await fetch("/api/tasks/"+taskId+"/approval",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({approved:ok})})}
+async function decision(ok){if(!taskId)return;await fetch("/api/tasks/"+taskId+"/approval",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({approved:ok}));if(ok){$("publish").disabled=false}}
+async function publish(){if(!taskId)return;let path=$("pubpath").value.trim(),content=$("result").textContent;if(!path)return log("Enter a GitHub path first","WAIT");let r=await fetch("/api/tasks/"+taskId+"/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path,content})});let d=await r.json();log(d.error||("Published: "+path),d.error?"ERROR":"PUBLISHED");$("result").textContent=JSON.stringify(d,null,2)}
 async function loadHistory(){let r=await fetch("/api/tasks");let d=await r.json();$("history").innerHTML=d.length?d.reverse().map(x=>'<div class="hist" onclick="connect(\''+x.id+'\')">'+x.task.slice(0,48)+(x.task.length>48?'…':'')+'<span>'+x.status+'</span></div>').join(""):"No tasks yet."}
 async function clearAll(){$("task").value="";$("url").value="";$("result").textContent="No output.";reset();$("bar").style.width="0%";$("log").innerHTML='<div class="line"><b>READY</b> — waiting for a task</div>'}
 async function caps(){let r=await fetch("/api/capabilities"),d=await r.json();$("caps").innerHTML=d.map(x=>'<span class="cap '+(x.available?"ok":"")+'">'+x.provider+" · "+(x.available?"READY":"MISSING")+"</span>").join("")}
@@ -79,6 +86,19 @@ async def cancel_task(task_id: str): return {"ok":await runtime_manager.cancel(t
 
 @app.post("/api/tasks/{task_id}/approval")
 async def approval(task_id: str, req: DecisionRequest): return {"ok":await runtime_manager.approve(task_id,req.approved)}
+
+@app.post("/api/tasks/{task_id}/publish")
+async def publish(task_id: str, req: PublishRequest):
+    item=runtime_manager.get(task_id)
+    if not item: return {"error":"task not found"}
+    if not item.approved: return {"error":"human approval is required before publishing"}
+    try:
+        result=GitHubPublisher().upsert_text(req.path, req.content, req.message)
+        await runtime_manager.event(item,"GitHub publish completed","completed",100,"github")
+        item.result={"publish":result}
+        return result
+    except Exception as exc:
+        return {"error":str(exc)}
 
 @app.websocket("/ws/tasks/{task_id}")
 async def task_ws(websocket: WebSocket, task_id: str):
