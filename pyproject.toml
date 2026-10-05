@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-agent-team"
+version = "0.2.0"
+description = "Local orchestration interface for existing AI/browser/crawler/coding agents"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2",
+  "pydantic-settings>=2",
+  "pyyaml>=6",
+  "aiosqlite>=0.19",
+  "httpx>=0.27",
+  "python-dotenv>=1",
+  "psutil>=5.9"
+]
+
+[project.optional-dependencies]
+agents = ["openai-agents"]
+browser = ["browser-use"]
+crawler = ["crawl4ai"]
+coding = ["openhands-sdk"]
+github = ["PyGithub"]
+all = ["openai-agents", "browser-use", "crawl4ai", "openhands-sdk", "PyGithub"]
+
+[project.scripts]
+agent-team = "agent_team.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
